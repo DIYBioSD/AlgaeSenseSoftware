@@ -1,1 +1,0 @@
-Date Time,xxx,ID,Outside Temp,Outside Humidity,Tank Temp,pH Sensor Value,pH calculated,IR light #1,Full Light #1,Lux #1,IR Light #2,Full Light #2,Lux #2, Tank Temp #2, pH Sensor Val #2, pH Calculated #2, IR light #3,Full Light #3,Lux #3
