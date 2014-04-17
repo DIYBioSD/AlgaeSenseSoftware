@@ -14,7 +14,8 @@
  
 # Change the next 3 lines to suit where you install your script and what you want to call it
 DIR=/home/pi
-DAEMON=$DIR/senddata_debug.py
+#DAEMON=$DIR/senddata_debug.py
+DAEMON=$DIR/sd3.py
 DAEMON_NAME=senddata
  
 # This next line determines what user the script runs as.
