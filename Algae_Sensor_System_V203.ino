@@ -1,5 +1,17 @@
-// Version 2.02
+// Version 2.03
 // #include <Time.h>
+/*  Wiring Diagram
+PH sensors
+  Probe 1 set to A1
+  Probe 2 set to A2
+Optical Sensors
+   in line max 3 sensors, different addresses depending on ADDR pin floating, grounded or VCC'd
+   SDA/SCL pins 20/21 
+Temp Sensors DS1820B
+   - in line single pin = D2
+DHT Temp/Humidity Sensor
+  Set to D3
+*/
 #include <SD.h> // needed to write to card
 #include <OneWire.h> //needed for onewire temp DS18B20 temp sensor
 #include <DallasTemperature.h> //needed for onewire DS18B20 temp sensor
@@ -41,7 +53,7 @@ int arduino_ID = 0;
 uint16_t broadband = 0;
 uint16_t infrared = 0;
 Adafruit_TSL2561_Unified tsl_0 = Adafruit_TSL2561_Unified(TSL2561_ADDR_FLOAT, 12345);
-//Adafruit_TSL2561_Unified tsl_0 = Adafruit_TSL2561_Unified(TSL2561_ADDR_HIGH, 12345);
+Adafruit_TSL2561_Unified tsl_2 = Adafruit_TSL2561_Unified(TSL2561_ADDR_HIGH, 12345);
 Adafruit_TSL2561_Unified tsl_1 = Adafruit_TSL2561_Unified(TSL2561_ADDR_LOW, 54321);
 
 /*
@@ -66,8 +78,8 @@ float dhtHumidReading;
 float dhtTempReading;
 
 // Onewire DS18B20 Temp sensor declarations (internal in tank)
-const byte ONE_WIRE_BUS= 2;  // what pin for One Wire temp sensor;
-float tempReading;
+const byte ONE_WIRE_BUS= 2;  // D2  pin for One Wire DS18B20 temp sensor;
+float tempReading1, tempReading2;
 // Setup a oneWire instance to communicate with any OneWire devices (not just Maxim/Dallas temperature ICs)
 OneWire oneWire(ONE_WIRE_BUS);
 // Pass our oneWire reference to Dallas Temperature lib.
@@ -79,22 +91,26 @@ char fileName[] = "DATA00.txt";
 const byte chipSelect = 4; // for the SD card to write
 
 // pH sensor declarations
-const byte PHprobe = 1;
-float waterTemp = 0; //not byte
-int rawSensorValue = 0; // was float
-float sensorValue = 0;
-float pH_Calculated = 0;
-float pH_CalcTemp = 0;
+const byte PHprobe1 = 1; // set probe 1 to A1
+const byte PHprobe2 = 2; // set probe 2 to A2
+float waterTemp1 = 0; //not byte
+float waterTemp2 = 0; //not byte
+int rawSensorValue1 = 0; // was float
+float sensorValue1 = 0;
+int rawSensorValue2 = 0; // was float
+float sensorValue2 = 0;
+float pH_Calculated1 = 0;
+float pH_Calculated2 = 0;
+//float pH_CalcTemp = 0;
 const byte numSamples = 10;
 
 // Optical Sensor declarations
 uint32_t luminosity;
-//uint16_t irLum, fullSpectrumLum, lux;
-uint16_t irLum1, irLum2, fullSpectrumLum1, fullSpectrumLum2, lux1, lux2, outsideFullSpectrum, outsideLux, outsideIR;
+uint16_t irLum1, irLum2, irLum3, fullSpectrumLum1, fullSpectrumLum2, fullSpectrumLum3, lux1, lux2, lux3, outsideFullSpectrum, outsideLux, outsideIR;
 
 // Other declarations  
 long timeFromStart=0; // used to track time 
-const long timeDelay=600000; // milliseconds for delay
+const long timeDelay= 600000; //10000// milliseconds for delay
 long hoursPassed=0;
 long minutesPassed=0;
 long secondsPassed=0;
@@ -129,6 +145,7 @@ void setup(void)
   /* You can also manually set the gain or enable auto-gain support */
    tsl_0.setGain(TSL2561_GAIN_1X);      /* No gain ... use in bright light to avoid sensor saturation */
    tsl_1.setGain(TSL2561_GAIN_1X);      /* No gain ... use in bright light to avoid sensor saturation */
+   tsl_2.setGain(TSL2561_GAIN_1X);      /* No gain ... use in bright light to avoid sensor saturation */  
   // tsl.setGain(TSL2561_GAIN_16X);     /* 16x gain ... use in low light to boost sensitivity */
 // tsl.enableAutoGain(true);          /* Auto-gain ... switches automatically between 1x and 16x */
 //  tsl_0.enableAutoGain(true);          /* Auto-gain ... switches automatically between 1x and 16x */
@@ -139,6 +156,7 @@ void setup(void)
 //  tsl.setIntegrationTime(TSL2561_INTEGRATIONTIME_402MS);  /* 16-bit data but slowest conversions */
   tsl_0.setIntegrationTime(TSL2561_INTEGRATIONTIME_402MS);  /* 16-bit data but slowest conversions */
   tsl_1.setIntegrationTime(TSL2561_INTEGRATIONTIME_402MS);  /* 16-bit data but slowest conversions */
+  tsl_2.setIntegrationTime(TSL2561_INTEGRATIONTIME_402MS);  /* 16-bit data but slowest conversions */
 }
 
 void loop(void)
@@ -146,8 +164,10 @@ void loop(void)
 //  Serial.print("Free Ram:");
 //  Serial.println(freeRAM(), DEC);
   //clear variables
-  rawSensorValue = 0;
-  sensorValue=0;
+  rawSensorValue1 = 0;
+  sensorValue1=0;
+  rawSensorValue2 = 0;
+  sensorValue2=0;
   hoursPassed=(timeFromStart/3600);
   minutesPassed=(timeFromStart-(hoursPassed*3600))/60;
   secondsPassed=(timeFromStart-(hoursPassed*3600)-(minutesPassed*60));
@@ -204,17 +224,18 @@ void readOnewire()
   // Onewire DS18B20 Temp sensor to issue a global temperature request to all devices on the bus
   sensors.requestTemperatures(); // Send the command to get temperatures
 //  Serial.print("Temperature for Device 1 is: ");
-  tempReading = sensors.getTempCByIndex(0); // Why "byIndex"? You can have more than one IC on the same bus. 0 refers to the first IC on the wire
+  tempReading1 = sensors.getTempCByIndex(0); // Why "byIndex"? You can have more than one IC on the same bus. 0 refers to the first IC on the wire
+  tempReading2 = sensors.getTempCByIndex(1);
 //  Serial.println(tempReading);
-  waterTemp =tempReading;
+  waterTemp1 =tempReading1;
   
   // Now turn the heating pad on or off depending on the internal tank temp
-  if (waterTemp > maxWaterTemp && curHeaterSetting == HIGH) { 
+  if (waterTemp1 > maxWaterTemp && curHeaterSetting == HIGH) { 
     digitalWrite(HEATER_SWITCH_PIN, LOW);
     curHeaterSetting = LOW;
   }
   else {
-     if (waterTemp < minWaterTemp && curHeaterSetting == LOW) { 
+     if (waterTemp1 < minWaterTemp && curHeaterSetting == LOW) { 
        digitalWrite(HEATER_SWITCH_PIN, HIGH);
        curHeaterSetting = HIGH;
      }
@@ -226,13 +247,13 @@ void readpHsensor()
   byte i;
   // Get pH reading from analog pin PHprobe
   for(i = 1;i <= numSamples;i++) {
-    rawSensorValue = analogRead(PHprobe);
+    rawSensorValue1 = analogRead(PHprobe1);
    // Serial.println(rawSensorValue);
-    sensorValue=sensorValue + rawSensorValue; ///4.095;
+    sensorValue1=sensorValue1 + rawSensorValue1; ///4.095;
     delay(100);
   } 
   // Now calculate the pH - average over the number of reads
-  sensorValue = sensorValue/numSamples; 
+  sensorValue1 = sensorValue1/numSamples; 
 
   /*  sensorValue = SensorValue/4.095;
   // pH_Calculated = 0.0178 * sensorValue - 1.889;
@@ -254,7 +275,26 @@ void readpHsensor()
 //  pH_CalcTemp = 7 - ((2.5-(sensorValue/200))/(0.2251+0.0009473 * waterTemp)); // revised 1/6/14
  // pH_Calculated = 7 - ((2.5-(sensorValue/200))/(0.257179+0.0009473 * waterTemp)); // revised 1/6/14  USING THIS ONE!!
  */
- pH_Calculated = 0.98*(0.0178 * sensorValue - 1.889);  // Using this one 96% of value FUDGE FACTOR!
+ pH_Calculated1 = 0.98*(0.0178 * sensorValue1 - 1.889);  // Using this one 96% of value FUDGE FACTOR!
+ 
+ // Second Probe
+// Only read if the board is not 111 or 222
+if (arduino_ID != 111 & arduino_ID != 222)
+ {
+ for(i = 1;i <= numSamples;i++) {
+    rawSensorValue2 = analogRead(PHprobe2);
+    sensorValue2=sensorValue2 + rawSensorValue2; ///4.095;
+    delay(100);
+  } 
+    // Now calculate the pH - average over the number of reads
+  sensorValue2 = sensorValue2/numSamples; 
+  pH_Calculated2 = 0.98*(0.0178 * sensorValue2 - 1.889);  // Using this one 96% of value FUDGE FACTOR!
+ }
+else  {
+   sensorValue2=0;
+   pH_Calculated2 = 0;
+    Serial.print("");
+   }   
 }
 
 void readDHT()
@@ -276,10 +316,10 @@ void readOpticalSensor()
  // sensors_event_t event;
  // tsl.getEvent(&event);
    /* Get a new sensor event */ 
-  sensors_event_t event1, event2;
+  sensors_event_t event1, event2, event3;
   tsl_0.getEvent(&event1);
   tsl_1.getEvent(&event2);
-  
+  tsl_2.getEvent(&event3);
   /* Display the results (light is measured in lux) */
   if (event1.light)
   {
@@ -302,6 +342,11 @@ void readOpticalSensor()
        and no reliable data could be generated! */
    // Serial.println("No Data optical 2");
   }
+      /* Display the results (light is measured in lux) */
+  if (event3.light)
+  {
+    lux3=event3.light;
+  }
  /* // More advanced data read example. Read 32 bits with top 16 bits IR, bottom 16 bits full spectrum. That way you can do whatever math and comparions you want!
   luminosity = tsl.getFullLuminosity();
   irLum = luminosity >> 16;
@@ -311,11 +356,12 @@ void readOpticalSensor()
 //
 tsl_0.getLuminosity (&irLum1, &fullSpectrumLum1);
 tsl_1.getLuminosity (&irLum2, &fullSpectrumLum2);
-if (!(irLum2==65535 && fullSpectrumLum2==65535 && lux2 == 0)) {
+tsl_2.getLuminosity (&irLum3, &fullSpectrumLum3);
+/*if (!(irLum2==65535 && fullSpectrumLum2==65535 && lux2 == 0)) {
   outsideIR=irLum2;
   outsideFullSpectrum=fullSpectrumLum2;
   outsideLux=lux2;
-  }
+  } */
 }
 
 /*
@@ -374,17 +420,21 @@ void outputToCard()
   Serial.print(" Humidity:");
   // 
   Serial.print(dhtHumidReading);
-  Serial.print(" Tank Temp:");
-//  Serial.println(tempReading);
-  Serial.print(tempReading);
+  Serial.print(" Tank Temps 1:");
+  Serial.print(tempReading1);
+  Serial.print(" 2:");
+  Serial.print(tempReading2);
  /* Serial.print(" Last Raw Sensor Value:  ");
   Serial.print(rawSensorValue);
   Serial.print("\n");*/
-  Serial.print(" pH Val:");
-  Serial.print(sensorValue);
- // Serial.print("\n");
-  Serial.print(" pH:");
-  Serial.print(pH_Calculated);
+  Serial.print(" pH Vals  1:");
+  Serial.print(sensorValue1);
+ Serial.print(" 2:");
+  Serial.print(sensorValue2);
+  Serial.print(" pH 1:");
+  Serial.print(pH_Calculated1);
+   Serial.print(" 2:");
+  Serial.print(pH_Calculated2);
  // Serial.print("\n");
  // Serial.print("pH 2nd Forumula:  ");
  // Serial.print(pH_CalcTemp);
@@ -407,10 +457,14 @@ void outputToCard()
   Serial.print(irLum2);   
   Serial.print(" Full 2:"); 
   Serial.print(fullSpectrumLum2);   
- /* Serial.print("Visible: "); 
-  Serial.print(fullSpectrumLum - irLum);   */
   Serial.print(" Lux 2:"); 
   Serial.print(lux2);
+  Serial.print(" IR 3:"); 
+  Serial.print(irLum3);   
+  Serial.print(" Full 3:"); 
+  Serial.print(fullSpectrumLum3);   
+  Serial.print(" Lux 3:"); 
+  Serial.print(lux3);
   
  // Now print just the data, comma delimited
   Serial.print(",");
@@ -420,11 +474,11 @@ void outputToCard()
   Serial.print(",");
   Serial.print(dhtHumidReading);
   Serial.print(",");
-  Serial.print(tempReading);
+  Serial.print(tempReading1);
   Serial.print(",");
-  Serial.print(sensorValue);
+  Serial.print(sensorValue1);
   Serial.print(",");
-  Serial.print(pH_Calculated);
+  Serial.print(pH_Calculated1);
   Serial.print(",");
   Serial.print(irLum1);   
   Serial.print(",");
@@ -432,12 +486,24 @@ void outputToCard()
   Serial.print(",");
   Serial.print(lux1);
   Serial.print(",");
-/*  Serial.print(irLum2);   
+  Serial.print(irLum2);   
   Serial.print(",");
   Serial.print(fullSpectrumLum2);   
   Serial.print(",");
-  Serial.println(lux2);
-  */
+  Serial.print(lux2);
+  Serial.print(",");
+  Serial.print(tempReading2);
+  Serial.print(",");
+  Serial.print(sensorValue2);
+  Serial.print(",");
+  Serial.print(pH_Calculated2);
+  Serial.print(",");
+  Serial.print(irLum3);   
+  Serial.print(",");
+  Serial.print(fullSpectrumLum3);   
+  Serial.print(",");
+  Serial.println(lux3);
+  /*
   if (irLum2==65535 && fullSpectrumLum2==65535 && lux2==0) Serial.print(outsideIR);
     else Serial.print(irLum2);
       Serial.print(",");
@@ -446,6 +512,7 @@ void outputToCard()
       Serial.print(",");
   if (irLum2==65535 && fullSpectrumLum2==65535 && lux2==0) Serial.println(outsideLux);
     else Serial.println(lux2);  
+    */
  /* dataFile = SD.open(fileName, FILE_WRITE); 
   if (dataFile) {
     dataFile.print("Time Elapsed = ");
